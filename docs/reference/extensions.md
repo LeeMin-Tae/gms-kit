@@ -136,7 +136,7 @@ and surrounding whitespace.
 The example omits other catalog metadata for brevity. The current version must
 not be repeated in `releases`; malformed or duplicate release records are
 rejected. Bundle pins still use the current catalog resolution path until the
-separate bundle work described in [#4719](https://github.com/LeeMin-Tae/gms-kit/issues/4719)
+separate bundle work described in #4719
 adds exact-version component lookup.
 
 `--json` describes one installed extension and writes a single JSON object to

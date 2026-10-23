@@ -7290,7 +7290,7 @@ steps:
         """Regression: while-loop condition must see updated step output
         from the most recent iteration, not stale iteration-0 data.
 
-        See https://github.com/LeeMin-Tae/gms-kit/issues/2592
+        See issue #2592
         """
         from specify_cli.workflows.engine import WorkflowEngine, WorkflowDefinition
         from specify_cli.workflows.base import RunStatus
@@ -7348,7 +7348,7 @@ steps:
     def test_do_while_loop_condition_reads_latest_iteration(self, project_dir):
         """Regression: do-while loop condition must also see updated output.
 
-        See https://github.com/LeeMin-Tae/gms-kit/issues/2592
+        See issue #2592
         """
         from specify_cli.workflows.engine import WorkflowEngine, WorkflowDefinition
         from specify_cli.workflows.base import RunStatus
@@ -7394,7 +7394,7 @@ steps:
         """While loop must still run to max_iterations when the condition
         never becomes false — copy-back must not break this path.
 
-        See https://github.com/LeeMin-Tae/gms-kit/issues/2592
+        See issue #2592
         """
         from specify_cli.workflows.engine import WorkflowEngine, WorkflowDefinition
         from specify_cli.workflows.base import RunStatus
@@ -7495,7 +7495,7 @@ steps:
         """Do-while loop must still run to max_iterations when the condition
         never becomes false.
 
-        See https://github.com/LeeMin-Tae/gms-kit/issues/2592
+        See issue #2592
         """
         from specify_cli.workflows.engine import WorkflowEngine, WorkflowDefinition
         from specify_cli.workflows.base import RunStatus
@@ -7541,7 +7541,7 @@ steps:
         """Multi-step loop body: step B must see step A's output from the
         current iteration, not a stale previous one.
 
-        See https://github.com/LeeMin-Tae/gms-kit/issues/2592
+        See issue #2592
         """
         from specify_cli.workflows.engine import WorkflowEngine, WorkflowDefinition
         from specify_cli.workflows.base import RunStatus

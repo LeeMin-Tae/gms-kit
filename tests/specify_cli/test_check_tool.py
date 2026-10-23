@@ -1,6 +1,6 @@
 """Tests for check_tool() — Claude Code CLI detection across install methods.
 
-Covers issue https://github.com/LeeMin-Tae/gms-kit/issues/550:
+Covers issue issue #550:
   `specify check` reports "Claude Code CLI (not found)" even when claude is
   installed via npm-local (the default `claude` installer path).
 """

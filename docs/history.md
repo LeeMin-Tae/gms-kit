@@ -2,7 +2,7 @@
 
 GMS Kit began as a toolkit for making specifications the starting point of
 AI-assisted development. From its
-[first full check-in](https://github.com/LeeMin-Tae/gms-kit/commit/28fdfaa86973d4402eecd89ba6c87d31e1edae03),
+first full check-in,
 it described three ways to apply Spec-Driven Development:
 
 - **0-to-1 Development ("Greenfield")** generates a new system from
@@ -31,7 +31,7 @@ reducing the work to any one person.
 [Den Delimarsky](https://github.com/localden) and
 [John Lam](https://github.com/jflam) conceived GMS Kit and gave the project its
 first shape. Den authored the
-[initial commit](https://github.com/LeeMin-Tae/gms-kit/commit/fa2736371e077f55c4fe145fea186bab2561386d) on
+initial commit on
 August 21, 2025 and led the repository through its first months.
 
 That founding period established the shape users still recognize: the Specify
@@ -45,7 +45,7 @@ scenario.
 
 [Manfred Riem](https://github.com/mnriem) took over as lead maintainer on
 January 22, 2026. The transition became publicly visible when the repository's
-global [`CODEOWNERS` entry](https://github.com/LeeMin-Tae/gms-kit/commit/3040d33c31d8a26d50f91aec5d62d1cecac3298c)
+global `CODEOWNERS` entry
 changed to `@mnriem` on February 23.
 
 During this stewardship, the maintainer team's focus moved from building a
@@ -121,11 +121,11 @@ At the same time, core maintainers began using the model to add two first-party
 processes alongside feature delivery:
 
 - On June 5, version 0.9.5 introduced the bundled, opt-in
-  [`bug` extension](https://github.com/LeeMin-Tae/gms-kit/commit/60302fefec541a68fcac6f0428a95ba35f2acadf).
+  `bug` extension.
   Its assess → fix → test process keeps bug diagnosis, remediation, and
   verification separate and documented.
 - On July 17, version 0.13.0 introduced the bundled, opt-in
-  [`assess` extension](https://github.com/LeeMin-Tae/gms-kit/commit/208d38695fc88d8eaec7855c96e5098a852927cf).
+  `assess` extension.
   Its intake → research → define → shape → decide process evaluates an idea
   before it enters SDD.
 

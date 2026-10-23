@@ -27,7 +27,7 @@ GMS Kit uses dotted names such as `gmskit.specify`; use Kiro's
 Kiro CLI does not substitute `$ARGUMENTS` in file-based prompts. GMS Kit
 therefore renders a prose fallback instructing the model to take the argument
 from the conversation. See
-[LeeMin-Tae/gms-kit#1926](https://github.com/LeeMin-Tae/gms-kit/issues/1926).
+#1926.
 
 ## Workflow Dispatch
 

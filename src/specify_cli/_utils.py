@@ -157,8 +157,8 @@ def check_tool(tool: str, tracker=None) -> bool:
         True if tool is found, False otherwise
     """
     # Special handling for Claude CLI local installs
-    # See: https://github.com/LeeMin-Tae/gms-kit/issues/123
-    # See: https://github.com/LeeMin-Tae/gms-kit/issues/550
+    # See: issue #123
+    # See: issue #550
     # Claude Code can be installed in two local paths:
     #   1. ~/.claude/local/claude          (after `claude migrate-installer`)
     #   2. ~/.claude/local/node_modules/.bin/claude  (npm-local install, e.g. via nvm)

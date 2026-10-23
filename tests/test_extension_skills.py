@@ -1361,7 +1361,7 @@ class TestExtensionSkillRegistration:
     def test_skills_registered_when_dir_missing(self, project_dir, temp_dir, ai):
         """Extension add should create skills dir on demand and register skills.
 
-        Regression test for https://github.com/LeeMin-Tae/gms-kit/issues/2682:
+        Regression test for issue #2682:
         when an extension is installed before the agent skills directory exists,
         skills must still be materialized (the directory is created on demand).
         """

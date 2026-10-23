@@ -214,7 +214,7 @@ Restart your IDE to refresh the command list.
 
 ## Behavior change: `/constitution` no longer propagates into templates
 
-The `/constitution` command ([#3790](https://github.com/LeeMin-Tae/gms-kit/pull/3790)) is scoped to
+The `/constitution` command (#3790) is scoped to
 its own artifact. It updates
 `.specify/memory/constitution.md` and writes a Sync Impact Report, and **no longer edits**
 `plan-template.md`, `spec-template.md`, `tasks-template.md`, installed command files, or

@@ -1369,7 +1369,7 @@ class TestFeatureDirectoryResolution:
 @requires_bash
 class TestDescriptionQuoting:
     """Descriptions with quotes, apostrophes, and backslashes must not break the script.
-    Regression tests for https://github.com/LeeMin-Tae/gms-kit/issues/2339
+    Regression tests for issue #2339
     """
 
     @pytest.mark.parametrize(

@@ -86,7 +86,7 @@ may be enough; it does not have to become an SDD `spec.md`.
 &#9733; For substantial changes, contributors can instead expand the requirements
 with GMS Kit's core SDD commands against the project's constitution. GMS Kit
 used this process on itself in the
-[historical bundler work](https://github.com/LeeMin-Tae/gms-kit/commit/3fd1e54d4b237af6124bb967e2eae24c93685a89):
+historical bundler work:
 the commit contains a constitution and feature specification for the
 `specify bundle` command. This is evidence of **SDD dogfooding for that
 feature**; the bundler work is distinct from the current `feature-assess`
@@ -109,7 +109,7 @@ keeps [CLI](https://github.com/LeeMin-Tae/gms-kit/blob/main/design/cli.md),
 and [workflow-step](https://github.com/LeeMin-Tae/gms-kit/blob/main/design/workflow-step.md)
 design documents.
 
-&#9733; The [bundler SDD snapshot](https://github.com/LeeMin-Tae/gms-kit/commit/3fd1e54d4b237af6124bb967e2eae24c93685a89)
+&#9733; The bundler SDD snapshot
 illustrates the deeper path: its plan, research, data model, contracts, and
 tasks made the design actionable through `/gmskit.plan` and
 `/gmskit.tasks`. This shows where GMS Kit itself was used without
@@ -117,7 +117,7 @@ presenting that level of detail as the default for every change.
 
 ### 4. Development: make reviewable changes
 
-The [bundler implementation](https://github.com/LeeMin-Tae/gms-kit/pull/3070)
+The bundler implementation
 added `specify bundle` after the recorded SDD work. This is a concrete
 specification-led feature in the project. Other bounded changes use the
 ordinary issue, PR, review, and test process.
@@ -138,7 +138,7 @@ evidence or review bar.
 ### 5. Testing: verify both intent and behavior
 
 &#9733; The bundler work includes a
-[convergence pass](https://github.com/LeeMin-Tae/gms-kit/commit/de1c8ce6765f07cd1c4728a251b95adbfa3a8d07)
+convergence pass
 that appended a missing task. This is one example of GMS Kit's SDD process
 checking implementation against intent rather than treating the first pass
 as complete. The
@@ -261,15 +261,15 @@ Kit's SDD process; conventional automation and policies are unmarked.
 
 | Month | What changed |
 | --- | --- |
-| August 2025 | <ul><li><a href="https://github.com/LeeMin-Tae/gms-kit/commit/28fdfaa8">GitHub Release automation</a> was added.</li></ul> |
-| September 2025 | <ul><li><a href="https://github.com/LeeMin-Tae/gms-kit/commit/4b98c20f">Documentation deployment</a> was added.</li><li><a href="https://github.com/LeeMin-Tae/gms-kit/commit/6f3e450c">Contribution guidelines</a> began requiring disclosure of AI assistance, including contributor-run agents.</li></ul> |
-| October 2025 | <ul><li><a href="https://github.com/LeeMin-Tae/gms-kit/commit/33a07969">Markdown linting</a> was added to PR and <code>main</code> checks.</li></ul> |
-| February 2026 | <ul><li><a href="https://github.com/LeeMin-Tae/gms-kit/pull/1622">Dependabot</a> began proposing weekly pip and GitHub Actions dependency-update PRs.</li><li>A <a href="https://github.com/LeeMin-Tae/gms-kit/commit/9402ebd0">CodeQL workflow</a> was added for code scanning.</li><li><a href="https://github.com/LeeMin-Tae/gms-kit/pull/1637">Pytest CI</a> began running tests on PRs and pushes to <code>main</code>.</li><li><a href="https://github.com/LeeMin-Tae/gms-kit/pull/1637">Ruff linting</a> was added to the Python CI workflow.</li></ul> |
-| May 2026 | <ul><li><a href="https://github.com/LeeMin-Tae/gms-kit/pull/2655">Extension submissions</a> gained catalog validation and draft PRs. &#9733;</li><li><a href="https://github.com/LeeMin-Tae/gms-kit/pull/2655">Preset submissions</a> gained catalog validation and draft PRs. &#9733;</li></ul> |
-| June 2026 | <ul><li>An <a href="https://github.com/LeeMin-Tae/gms-kit/pull/3023">agentic bug-assess workflow</a> was added. &#9733;</li><li>The <a href="https://github.com/LeeMin-Tae/gms-kit/commit/3fd1e54d4b237af6124bb967e2eae24c93685a89">bundler feature</a> used GMS Kit's SDD process to produce its specification, plan, and tasks. &#9733;</li><li><a href="https://github.com/LeeMin-Tae/gms-kit/pull/2915">PyPI publishing</a> gained a conventional workflow.</li><li><a href="https://github.com/LeeMin-Tae/gms-kit/pull/3126">ShellCheck</a> began checking shell scripts in CI.</li></ul> |
-| July 2026 | <ul><li><a href="https://github.com/LeeMin-Tae/gms-kit/pull/3258">Bug-fix</a> extended the agentic issue workflow with a human handoff. &#9733;</li><li><a href="https://github.com/LeeMin-Tae/gms-kit/pull/3257">Bug-test</a> added a separate verification stage. &#9733;</li><li><a href="https://github.com/LeeMin-Tae/gms-kit/pull/3553">Bundle submissions</a> gained catalog automation. &#9733;</li></ul> |
-| August 2026 | <ul><li>The <a href="https://github.com/LeeMin-Tae/gms-kit/pull/4186">feature-assess workflow</a> began using GMS Kit's <code>assess</code> extension on feature requests. &#9733;</li></ul> |
-| September 2026 | <ul><li><a href="https://github.com/LeeMin-Tae/gms-kit/pull/4512">AI disclosure</a> began requiring agent, model, settings, and extent.</li><li><a href="https://github.com/LeeMin-Tae/gms-kit/pull/4752">Contribution guidance</a> added attribution for agent-authored commits and comments.</li></ul> |
+| August 2025 | <ul><li>GitHub Release automation was added.</li></ul> |
+| September 2025 | <ul><li>Documentation deployment was added.</li><li>Contribution guidelines began requiring disclosure of AI assistance, including contributor-run agents.</li></ul> |
+| October 2025 | <ul><li>Markdown linting was added to PR and <code>main</code> checks.</li></ul> |
+| February 2026 | <ul><li>Dependabot began proposing weekly pip and GitHub Actions dependency-update PRs.</li><li>A CodeQL workflow was added for code scanning.</li><li>Pytest CI began running tests on PRs and pushes to <code>main</code>.</li><li>Ruff linting was added to the Python CI workflow.</li></ul> |
+| May 2026 | <ul><li>Extension submissions gained catalog validation and draft PRs. &#9733;</li><li>Preset submissions gained catalog validation and draft PRs. &#9733;</li></ul> |
+| June 2026 | <ul><li>An agentic bug-assess workflow was added. &#9733;</li><li>The bundler feature used GMS Kit's SDD process to produce its specification, plan, and tasks. &#9733;</li><li>PyPI publishing gained a conventional workflow.</li><li>ShellCheck began checking shell scripts in CI.</li></ul> |
+| July 2026 | <ul><li>Bug-fix extended the agentic issue workflow with a human handoff. &#9733;</li><li>Bug-test added a separate verification stage. &#9733;</li><li>Bundle submissions gained catalog automation. &#9733;</li></ul> |
+| August 2026 | <ul><li>The feature-assess workflow began using GMS Kit's <code>assess</code> extension on feature requests. &#9733;</li></ul> |
+| September 2026 | <ul><li>AI disclosure began requiring agent, model, settings, and extent.</li><li>Contribution guidance added attribution for agent-authored commits and comments.</li></ul> |
 
 This was not a handoff from conventional automation to agents. Tests, lint,
 scanning, and publishing kept repeatable work in GitHub Actions, while
