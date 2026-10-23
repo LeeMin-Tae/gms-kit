@@ -1,0 +1,51 @@
+schema_version: "1.0"
+
+preset:
+  id: "lean"
+  name: "Lean Workflow"
+  version: "1.0.0"
+  description: "Minimal core workflow commands - just the prompt, just the artifact"
+  author: "github"
+  repository: "https://github.com/LeeMin-Tae/gms-kit"
+  license: "MIT"
+
+requires:
+  gmskit_version: ">=0.6.0"
+
+provides:
+  templates:
+    - type: "command"
+      name: "gmskit.specify"
+      file: "commands/gmskit.specify.md"
+      description: "Lean specify - create spec.md from a feature description"
+      replaces: "gmskit.specify"
+
+    - type: "command"
+      name: "gmskit.plan"
+      file: "commands/gmskit.plan.md"
+      description: "Lean plan - create plan.md from the spec"
+      replaces: "gmskit.plan"
+
+    - type: "command"
+      name: "gmskit.tasks"
+      file: "commands/gmskit.tasks.md"
+      description: "Lean tasks - create tasks.md from plan and spec"
+      replaces: "gmskit.tasks"
+
+    - type: "command"
+      name: "gmskit.implement"
+      file: "commands/gmskit.implement.md"
+      description: "Lean implement - execute tasks from tasks.md"
+      replaces: "gmskit.implement"
+
+    - type: "command"
+      name: "gmskit.constitution"
+      file: "commands/gmskit.constitution.md"
+      description: "Lean constitution - create or update project constitution"
+      replaces: "gmskit.constitution"
+
+tags:
+  - "lean"
+  - "minimal"
+  - "workflow"
+  - "core"

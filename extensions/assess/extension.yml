@@ -1,0 +1,40 @@
+schema_version: "1.0"
+
+extension:
+  id: assess
+  name: "Idea Assessment Pipeline"
+  version: "1.0.1"
+  description: "Assess an idea before Spec-Driven Development via intake, research, define, shape, and decide. A go verdict hands off to /gmskit.specify; a kill closes it. Lives under .specify/assessments/<slug>/"
+  category: "process"
+  effect: "read-write"
+  author: gms-kit-core
+  repository: https://github.com/LeeMin-Tae/gms-kit
+  license: MIT
+
+requires:
+  gmskit_version: ">=0.9.0"
+
+provides:
+  commands:
+    - name: gmskit.assess.intake
+      file: commands/gmskit.assess.intake.md
+      description: "Capture and normalize a raw idea (text, URL, ticket, or codebase pointer) into an intake note"
+    - name: gmskit.assess.research
+      file: commands/gmskit.assess.research.md
+      description: "Gather evidence — users, market, prior art, and data — to support or challenge the idea"
+    - name: gmskit.assess.define
+      file: commands/gmskit.assess.define.md
+      description: "Define the problem: who is affected, what hurts, goals, non-goals, and success metrics"
+    - name: gmskit.assess.shape
+      file: commands/gmskit.assess.shape.md
+      description: "Shape a concept: solution options, scope, appetite, and trade-offs (no implementation design)"
+    - name: gmskit.assess.decide
+      file: commands/gmskit.assess.decide.md
+      description: "Apply a go / needs-clarification / kill gate and hand survivors off to /gmskit.specify"
+
+tags:
+  - "assessment"
+  - "discovery"
+  - "triage"
+  - "product"
+  - "workflow"

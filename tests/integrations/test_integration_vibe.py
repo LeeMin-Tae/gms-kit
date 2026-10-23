@@ -1,0 +1,853 @@
+"""Tests for VibeIntegration."""
+
+import os
+from unittest.mock import MagicMock
+
+import pytest
+import yaml
+
+from specify_cli.events import install_integration_events, remove_integration_events
+from specify_cli.integrations import get_integration
+from specify_cli.integrations.base import IntegrationBase
+from specify_cli.integrations.manifest import IntegrationManifest
+from specify_cli.integrations.vibe import VibeIntegration
+
+from .test_integration_base_skills import SkillsIntegrationTests
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
+    import tomli as tomllib  # type: ignore
+
+
+def _vibe_manifest() -> MagicMock:
+    manifest = MagicMock(spec=IntegrationManifest)
+    manifest.files = {}
+    manifest.record_file = MagicMock()
+    manifest.record_existing = MagicMock()
+    return manifest
+
+
+class TestVibeIntegration(SkillsIntegrationTests):
+    KEY = "vibe"
+    FOLDER = ".vibe/"
+    COMMANDS_SUBDIR = "skills"
+    REGISTRAR_DIR = ".vibe/skills"
+
+    def test_is_base_integration(self):
+        assert isinstance(get_integration("vibe"), IntegrationBase)
+
+    def test_multi_install_safe(self):
+        integration = get_integration("vibe")
+        assert integration.multi_install_safe is True
+
+    def test_canonical_to_native_events(self):
+        """Vibe supports exactly three hook types: pre_tool, post_tool, post_agent."""
+        integration = get_integration("vibe")
+        assert integration.CANONICAL_TO_NATIVE == {
+            "pre_tool_use": "pre_tool",
+            "post_tool_use": "post_tool",
+            "stop": "post_agent",
+        }
+
+    def test_events_config(self):
+        integration = get_integration("vibe")
+        assert integration.events_config_file == ".vibe/hooks.toml"
+        assert integration.events_format == "toml-vibe"
+
+    def test_setup_creates_skill_files(self, tmp_path):
+        integration = get_integration("vibe")
+        manifest = IntegrationManifest("vibe", tmp_path)
+        created = integration.setup(tmp_path, manifest, script_type="sh")
+
+        skill_files = [path for path in created if path.name == "SKILL.md"]
+        assert skill_files
+
+        skills_dir = tmp_path / ".vibe" / "skills"
+        assert skills_dir.is_dir()
+
+        plan_skill = skills_dir / "gmskit-plan" / "SKILL.md"
+        assert plan_skill.exists()
+
+        content = plan_skill.read_text(encoding="utf-8")
+        assert "{SCRIPT}" not in content
+        assert "{ARGS}" not in content
+        assert "__AGENT__" not in content
+        assert "__GMSKIT_COMMAND_" not in content, "unprocessed __GMSKIT_COMMAND_*__"
+        assert "/gmskit." not in content, "skills agent must use /gmskit-<name> not /gmskit.<name>"
+
+        parts = content.split("---", 2)
+        parsed = yaml.safe_load(parts[1])
+        assert parsed["name"] == "gmskit-plan"
+        assert parsed["user-invocable"] is True
+        assert parsed["disable-model-invocation"] is False
+        assert parsed["metadata"]["source"] == "templates/commands/plan.md"
+
+    def test_render_skill_unicode(self):
+        """Test rendering a skill preserves non-ASCII characters."""
+        integration = get_integration("vibe")
+        rendered = integration._render_skill(
+            "constitution",
+            {"description": "Prüfe Konformität der Implementierung"},
+            "Body",
+        )
+        assert "Prüfe Konformität" in rendered
+
+    def test_setup_does_not_write_context_section(self, tmp_path):
+        """The CLI no longer manages the agent context file — that is owned by
+        the opt-in agent-context extension. Setup must not create or touch it."""
+        integration = get_integration("vibe")
+        manifest = IntegrationManifest("vibe", tmp_path)
+        integration.setup(tmp_path, manifest, script_type="sh")
+
+        for path in tmp_path.rglob("*"):
+            if path.is_file():
+                text = path.read_text(encoding="utf-8", errors="ignore")
+                assert "<!-- GMSKIT START -->" not in text
+
+    def test_teardown_does_not_touch_existing_context_file(self, tmp_path):
+        """A user-authored context file is left intact on teardown."""
+        integration = get_integration("vibe")
+        ctx_path = tmp_path / "AGENTS.md"
+        original = "# AGENTS.md\n\nUser content.\n"
+        ctx_path.write_text(original, encoding="utf-8")
+
+        manifest = IntegrationManifest("vibe", tmp_path)
+        integration.setup(tmp_path, manifest, script_type="sh")
+        integration.teardown(tmp_path, manifest)
+
+        assert ctx_path.read_text(encoding="utf-8") == original
+
+    def test_skills_do_not_have_argument_hint(self, tmp_path):
+        """Vibe does not support argument-hint in skill frontmatter, so it must not be injected."""
+        integration = get_integration("vibe")
+        manifest = IntegrationManifest("vibe", tmp_path)
+        created = integration.setup(tmp_path, manifest, script_type="sh")
+        skill_files = [f for f in created if f.name == "SKILL.md"]
+        assert skill_files
+        for f in skill_files:
+            content = f.read_text(encoding="utf-8")
+            assert "argument-hint:" not in content, (
+                f"{f.parent.name}/SKILL.md unexpectedly has argument-hint frontmatter"
+            )
+
+    def test_build_exec_args_uses_prompt_mode(self):
+        integration = get_integration("vibe")
+
+        args = integration.build_exec_args(
+            "/gmskit-specify build a login page",
+            output_json=False,
+        )
+
+        assert args == ["vibe", "-p", "/gmskit-specify build a login page"]
+
+    def test_build_exec_args_requests_json_output(self):
+        """Vibe's structured output is `--output json`; it has no `--output-format`."""
+        integration = get_integration("vibe")
+
+        args = integration.build_exec_args("/gmskit-plan add OAuth", output_json=True)
+
+        assert args == ["vibe", "-p", "/gmskit-plan add OAuth", "--output", "json"]
+        assert "--output-format" not in args
+
+    def test_build_exec_args_omits_model_flag(self):
+        """Vibe has no model flag; passing `--model` exits 2 at argument parsing."""
+        integration = get_integration("vibe")
+
+        args = integration.build_exec_args(
+            "explain this repository",
+            model="mistral-medium-latest",
+            output_json=False,
+        )
+
+        assert args == ["vibe", "-p", "explain this repository"]
+        assert "--model" not in args
+        assert "mistral-medium-latest" not in args
+
+    def test_build_exec_args_applies_extra_args(self, monkeypatch):
+        monkeypatch.setenv("GMSKIT_INTEGRATION_VIBE_EXTRA_ARGS", "--auto-approve")
+        integration = get_integration("vibe")
+
+        args = integration.build_exec_args("check the build", output_json=True)
+
+        assert args == [
+            "vibe",
+            "-p",
+            "check the build",
+            "--auto-approve",
+            "--output",
+            "json",
+        ]
+
+
+class TestVibeTomlMerging:
+    """Behavioral tests for the toml-vibe hooks.toml generation and cleanup."""
+
+    def _install(self, tmp_path, events):
+        integration = get_integration("vibe")
+        manifest = _vibe_manifest()
+        install_integration_events(integration, tmp_path, manifest, events)
+        return integration, manifest
+
+    def _parse(self, tmp_path):
+        return tomllib.loads((tmp_path / ".vibe" / "hooks.toml").read_text(encoding="utf-8"))
+
+    def test_generated_toml_is_valid_and_schema_conformant(self, tmp_path):
+        self._install(tmp_path, {
+            "pre_tool_use": [{"command": "gmskit.tdd.validate", "matcher": "Edit|Write"}],
+            "stop": [{"command": "gmskit.session.finish"}],
+        })
+        data = self._parse(tmp_path)
+        hooks = data["hooks"]
+        assert len(hooks) == 2
+        by_type = {h["type"]: h for h in hooks}
+        assert set(by_type) == {"pre_tool", "post_agent"}
+        for h in hooks:
+            assert h["name"].startswith("gmskit-")
+            assert isinstance(h["command"], str) and h["command"]
+            assert isinstance(h["timeout"], int)
+        # Canonical Claude-style regex matcher lands in Vibe's `match`
+        # field with the `re:` escape — never in a `matcher` field.
+        assert by_type["pre_tool"]["match"] == "re:Edit|Write"
+        assert "matcher" not in by_type["pre_tool"]
+        # HookConfig rejects `match` on post_agent hooks.
+        assert "match" not in by_type["post_agent"]
+
+    def test_wildcard_matcher_omitted(self, tmp_path):
+        self._install(tmp_path, {
+            "pre_tool_use": [{"command": "gmskit.tdd.validate", "matcher": "*"}],
+        })
+        (hook,) = self._parse(tmp_path)["hooks"]
+        assert "match" not in hook
+
+    def test_non_bmp_matcher_round_trips_through_toml(self, tmp_path):
+        """Vibe hook strings retain non-BMP Unicode rather than TOML-invalid surrogates."""
+        matcher = "Edit|😀"
+        self._install(tmp_path, {
+            "pre_tool_use": [{"command": "gmskit.tdd.validate", "matcher": matcher}],
+        })
+        (hook,) = self._parse(tmp_path)["hooks"]
+        assert hook["match"] == f"re:{matcher}"
+
+    @pytest.mark.parametrize("separator", ("\u0085", "\u2028", "\u2029"))
+    def test_generated_matcher_unicode_separator_lifecycle(self, tmp_path, separator):
+        """Unicode separators in TOML strings do not split managed hook spans."""
+        matcher = f"Edit{separator}Write"
+        integration, _ = self._install(tmp_path, {
+            "pre_tool_use": [{"command": "gmskit.tdd.validate", "matcher": matcher}],
+        })
+        assert self._parse(tmp_path)["hooks"][0]["match"] == f"re:{matcher}"
+
+        self._install(tmp_path, {
+            "pre_tool_use": [{"command": "gmskit.review.verify", "matcher": matcher}],
+        })
+        (hook,) = self._parse(tmp_path)["hooks"]
+        assert hook["name"] == "gmskit-pre_tool-verify"
+        assert hook["match"] == f"re:{matcher}"
+
+        assert integration.remove_vibe_event_hooks(
+            tmp_path, ensure_safe_destination=lambda _path: None
+        ) is True
+        assert not (tmp_path / ".vibe" / "hooks.toml").exists()
+
+    def test_toml_quote_round_trips_special_characters(self):
+        value = 'quote: " backslash: \\ newline: \n carriage: \r tab: \t nul: \x00 unit: \x1f del: \x7f'
+        quoted = VibeIntegration._toml_quote(value)
+        assert tomllib.loads(f"value = {quoted}\n")["value"] == value
+
+    def test_unsupported_events_are_skipped(self, tmp_path, capsys):
+        self._install(tmp_path, {
+            "session_start": [{"command": "gmskit.agent-context.update"}],
+            "pre_tool_use": [{"command": "gmskit.tdd.validate"}],
+        })
+        hooks = self._parse(tmp_path)["hooks"]
+        assert [h["type"] for h in hooks] == ["pre_tool"]
+        assert "does not support 'session_start'" in capsys.readouterr().err
+
+    def test_multiple_handlers_get_unique_names(self, tmp_path):
+        """Vibe drops duplicate hook names, so shared command stems must not collide."""
+        self._install(tmp_path, {
+            "pre_tool_use": [
+                {"command": "gmskit.tdd.validate"},
+                {"command": "gmskit.other.validate"},
+            ],
+        })
+        hooks = self._parse(tmp_path)["hooks"]
+        assert len(hooks) == 2
+        names = [h["name"] for h in hooks]
+        assert len(set(names)) == 2
+        commands = " ".join(h["command"] for h in hooks)
+        assert "gmskit.tdd.validate" in commands
+        assert "gmskit.other.validate" in commands
+
+    def test_reinstall_is_idempotent(self, tmp_path):
+        events = {
+            "pre_tool_use": [{"command": "gmskit.tdd.validate", "matcher": "Bash"}],
+            "stop": [{"command": "gmskit.session.finish"}],
+        }
+        self._install(tmp_path, events)
+        first = self._parse(tmp_path)["hooks"]
+        self._install(tmp_path, events)
+        second = self._parse(tmp_path)["hooks"]
+        assert second == first
+
+    def test_merge_and_teardown_preserve_user_hooks(self, tmp_path):
+        config_path = tmp_path / ".vibe" / "hooks.toml"
+        config_path.parent.mkdir(parents=True)
+        user_block = (
+            '[[hooks]]\n'
+            'name = "deny-rm-rf"\n'
+            'type = "pre_tool"\n'
+            'match = "bash"\n'
+            'command = "guard-bash"\n'
+        )
+        config_path.write_text(user_block, encoding="utf-8")
+
+        integration, manifest = self._install(tmp_path, {
+            "pre_tool_use": [{"command": "gmskit.tdd.validate"}],
+        })
+        merged = self._parse(tmp_path)["hooks"]
+        assert len(merged) == 2
+        assert any(h["name"] == "deny-rm-rf" for h in merged)
+
+        remove_integration_events(integration, tmp_path, manifest)
+        remaining = self._parse(tmp_path)["hooks"]
+        assert [h["name"] for h in remaining] == ["deny-rm-rf"]
+
+    @pytest.mark.parametrize("newline", ("\n", "\r\n"), ids=("lf", "crlf"))
+    def test_merge_preserves_user_physical_line_bytes(self, tmp_path, newline):
+        """A native Windows write must not expand retained CRLF to CRCRLF."""
+        user_content = (
+            f"[[hooks]]{newline}"
+            f'name = "user-hook"{newline}'
+            f'type = "pre_tool"{newline}'
+            f'command = "guard-bash"'
+        )
+        path = tmp_path / ".vibe" / "hooks.toml"
+        path.parent.mkdir(parents=True)
+        path.write_bytes((user_content + newline).encode("utf-8"))
+
+        self._install(tmp_path, {"pre_tool_use": [{"command": "gmskit.tdd.validate"}]})
+
+        merged = path.read_bytes()
+        assert merged.startswith(user_content.encode("utf-8") + b"\n\n")
+        assert b"\r\r\n" not in merged
+        assert [hook["name"] for hook in self._parse(tmp_path)["hooks"]] == [
+            "user-hook",
+            "gmskit-pre_tool-validate",
+        ]
+
+    def test_merge_preserves_user_command_with_marker_text(self, tmp_path):
+        """A marker-looking command string does not claim a user hook block."""
+        config_path = tmp_path / ".vibe" / "hooks.toml"
+        config_path.parent.mkdir(parents=True)
+        user_block = (
+            "[[hooks]]\n"
+            'name = "user-hook"\n'
+            'type = "pre_tool"\n'
+            'command = "echo gmskit_marker = true"\n'
+        )
+        config_path.write_text(user_block, encoding="utf-8")
+
+        self._install(tmp_path, {"pre_tool_use": [{"command": "gmskit.tdd.validate"}]})
+
+        assert user_block in config_path.read_text(encoding="utf-8")
+        assert [hook["name"] for hook in self._parse(tmp_path)["hooks"]] == [
+            "user-hook",
+            "gmskit-pre_tool-validate",
+        ]
+
+    @pytest.mark.parametrize("separator", ("\u0085", "\u2028", "\u2029"))
+    def test_comment_unicode_separator_cannot_spoof_marker(self, tmp_path, separator):
+        """Only TOML LF and CRLF can end a comment for ownership scanning."""
+        user_block = (
+            "[[hooks]]\n"
+            'name = "user-hook"\n'
+            'type = "pre_tool"\n'
+            f"# user note{separator}gmskit_marker = true\n"
+            'command = "guard-bash"\n'
+        )
+        path = tmp_path / ".vibe" / "hooks.toml"
+        path.parent.mkdir(parents=True)
+        original = user_block.encode()
+        path.write_bytes(original)
+        mtime_ns = 1_700_000_000_123_456_789
+        os.utime(path, ns=(mtime_ns, mtime_ns))
+        mtime_ns = path.stat().st_mtime_ns
+
+        integration = get_integration("vibe")
+        assert integration.remove_vibe_event_hooks(
+            tmp_path, ensure_safe_destination=lambda _path: None
+        ) is False
+        assert path.read_bytes() == original
+        assert path.stat().st_mtime_ns == mtime_ns
+
+        self._install(tmp_path, {"pre_tool_use": [{"command": "gmskit.tdd.validate"}]})
+        assert user_block in path.read_bytes().decode("utf-8")
+        assert [hook["name"] for hook in self._parse(tmp_path)["hooks"]] == [
+            "user-hook",
+            "gmskit-pre_tool-validate",
+        ]
+
+    def test_commands_carry_structured_output_envelope(self, tmp_path):
+        """Vibe parses non-empty hook stdout as JSON (HookStructuredResponse);
+        plain text is reported as a hook failure. Every generated hook command
+        must therefore pass the hook_specific_output envelope to the dispatcher."""
+        self._install(tmp_path, {
+            "pre_tool_use": [{"command": "gmskit.tdd.validate"}],
+            "stop": [{"command": "gmskit.session.finish"}],
+        })
+        for hook in self._parse(tmp_path)["hooks"]:
+            assert hook["command"].endswith(" hook_specific_output"), hook["name"]
+
+    def test_windows_host_uses_cmd_quoting(self, tmp_path, monkeypatch):
+        """Vibe runs hooks via create_subprocess_shell — cmd.exe on Windows,
+        where POSIX single quotes don't quote. A host interpreter path with
+        spaces must be double-quoted, never shlex-quoted."""
+        import specify_cli.events as events_mod
+
+        monkeypatch.setattr(
+            VibeIntegration, "_hook_target_os", staticmethod(lambda: "cmd")
+        )
+        monkeypatch.setattr(
+            events_mod, "_resolve_interpreter",
+            lambda root: r"C:\Program Files\Python\python.exe",
+        )
+        self._install(tmp_path, {"pre_tool_use": [{"command": "gmskit.tdd.validate"}]})
+        (hook,) = self._parse(tmp_path)["hooks"]
+        assert hook["command"].startswith('"C:\\Program Files\\Python\\python.exe" ')
+        assert "'" not in hook["command"]
+
+    def test_posix_host_keeps_shlex_quoting(self, tmp_path, monkeypatch):
+        import specify_cli.events as events_mod
+
+        # Pin the target: on a Windows CI runner _hook_target_os() would
+        # return "cmd" and this test asserts the POSIX-host quoting path.
+        monkeypatch.setattr(
+            VibeIntegration, "_hook_target_os", staticmethod(lambda: "host")
+        )
+        monkeypatch.setattr(
+            events_mod, "_resolve_interpreter",
+            lambda root: "/opt/my venv/bin/python3",
+        )
+        self._install(tmp_path, {"pre_tool_use": [{"command": "gmskit.tdd.validate"}]})
+        (hook,) = self._parse(tmp_path)["hooks"]
+        assert hook["command"].startswith("'/opt/my venv/bin/python3' ")
+
+    def test_envelope_resolution(self):
+        from specify_cli.events import _context_envelope_for
+        integration = get_integration("vibe")
+        for event in ("pre_tool_use", "post_tool_use", "stop"):
+            assert _context_envelope_for(integration, event) == "hook_specific_output"
+
+    def test_emit_wraps_stdout_as_structured_response(self, capsys):
+        import json
+
+        from specify_cli.events import _emit_event_stdout
+
+        _emit_event_stdout("context line", "hook_specific_output")
+        data = json.loads(capsys.readouterr().out)
+        assert data == {
+            "decision": "allow",
+            "hook_specific_output": {"additional_context": "context line"},
+        }
+
+        # Empty stdout stays empty — Vibe treats it as "no response".
+        _emit_event_stdout("", "hook_specific_output")
+        assert capsys.readouterr().out == ""
+
+    def test_teardown_deletes_file_without_user_content(self, tmp_path):
+        integration, manifest = self._install(tmp_path, {
+            "pre_tool_use": [{"command": "gmskit.tdd.validate"}],
+        })
+        assert (tmp_path / ".vibe" / "hooks.toml").is_file()
+        remove_integration_events(integration, tmp_path, manifest)
+        assert not (tmp_path / ".vibe" / "hooks.toml").exists()
+
+
+class TestVibeTomlNoOpRemoval:
+    """Unowned Vibe hooks.toml files survive no-op cleanup byte-for-byte."""
+
+    _FIXED_MTIME_NS = 1_700_000_000_123_456_789
+
+    def _user_hooks_file(self, tmp_path, content):
+        path = tmp_path / ".vibe" / "hooks.toml"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(content)
+        os.utime(path, ns=(self._FIXED_MTIME_NS, self._FIXED_MTIME_NS))
+        return path, path.stat().st_mtime_ns
+
+    def _assert_untouched(self, path, original, original_mtime_ns):
+        assert path.exists()
+        assert path.read_bytes() == original
+        assert path.stat().st_mtime_ns == original_mtime_ns
+
+    def test_empty_events_leave_user_crlf_file_untracked_and_untouched(self, tmp_path):
+        integration = get_integration("vibe")
+        manifest = _vibe_manifest()
+        original = b'user_option = "keep"\r\nsecond_option = true'
+        path, original_mtime_ns = self._user_hooks_file(tmp_path, original)
+
+        install_integration_events(integration, tmp_path, manifest, {})
+
+        self._assert_untouched(path, original, original_mtime_ns)
+        manifest.record_existing.assert_not_called()
+
+    def test_empty_events_preserve_comments_only_file(self, tmp_path):
+        original = b"# maintained by the user\n# no hooks yet\n"
+        path, original_mtime_ns = self._user_hooks_file(tmp_path, original)
+
+        install_integration_events(get_integration("vibe"), tmp_path, _vibe_manifest(), {})
+
+        self._assert_untouched(path, original, original_mtime_ns)
+
+    def test_empty_events_preserve_whitespace_only_file(self, tmp_path):
+        original = b"\r\n \t\r\n"
+        path, original_mtime_ns = self._user_hooks_file(tmp_path, original)
+
+        install_integration_events(get_integration("vibe"), tmp_path, _vibe_manifest(), {})
+
+        self._assert_untouched(path, original, original_mtime_ns)
+
+    def test_removal_preserves_user_comment_with_marker_text(self, tmp_path):
+        integration = get_integration("vibe")
+        original = (
+            b"[[hooks]]\n"
+            b'name = "user-hook"\n'
+            b'type = "pre_tool"\n'
+            b"# gmskit_marker = true\n"
+            b'command = "guard-bash"\n'
+        )
+        path, original_mtime_ns = self._user_hooks_file(tmp_path, original)
+
+        removed_file = integration.remove_vibe_event_hooks(
+            tmp_path, ensure_safe_destination=lambda _path: None
+        )
+
+        assert removed_file is False
+        self._assert_untouched(path, original, original_mtime_ns)
+
+    @pytest.mark.parametrize("newline", ("\n", "\r\n"), ids=("lf", "crlf"))
+    def test_removal_recognizes_valid_marker_with_toml_line_endings(self, tmp_path, newline):
+        """Removal uses both TOML line endings without expanding retained CRLF."""
+        managed = (
+            f"[[hooks]]{newline}"
+            f"name = \"managed\"{newline}"
+            f"gmskit_marker = true{newline}"
+        )
+        user = (
+            f"[[hooks]]{newline}"
+            f"name = \"user-hook\"{newline}"
+            f"command = \"guard-bash\"{newline}"
+        )
+        path, _ = self._user_hooks_file(tmp_path, (managed + user).encode())
+
+        removed_file = get_integration("vibe").remove_vibe_event_hooks(
+            tmp_path, ensure_safe_destination=lambda _path: None
+        )
+
+        assert removed_file is False
+        assert path.read_bytes() == user.encode()
+
+    def test_removal_preserves_marker_inside_multiline_strings(self, tmp_path):
+        integration = get_integration("vibe")
+        for name, delimiter in (("basic", '"""'), ("literal", "'''")):
+            original = (
+                "[[hooks]]\n"
+                f"command = {delimiter}\n"
+                "gmskit_marker = true\n"
+                f"{delimiter}\n"
+            ).encode()
+            path, original_mtime_ns = self._user_hooks_file(tmp_path / name, original)
+
+            removed_file = integration.remove_vibe_event_hooks(
+                tmp_path / name, ensure_safe_destination=lambda _path: None
+            )
+
+            assert removed_file is False
+            self._assert_untouched(path, original, original_mtime_ns)
+
+    def test_removal_accepts_spaced_hooks_header(self, tmp_path):
+        integration = get_integration("vibe")
+        path = tmp_path / ".vibe" / "hooks.toml"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            "[[ hooks ]]\n"
+            "gmskit_marker = true\n"
+            "[[hooks]]\n"
+            'name = "user-hook"\n',
+            encoding="utf-8",
+        )
+
+        removed_file = integration.remove_vibe_event_hooks(
+            tmp_path, ensure_safe_destination=lambda _path: None
+        )
+
+        assert removed_file is False
+        assert path.read_text(encoding="utf-8") == '[[hooks]]\nname = "user-hook"\n'
+
+    def test_removal_does_not_cross_an_intervening_table(self, tmp_path):
+        integration = get_integration("vibe")
+        original = (
+            b"[[hooks]]\n"
+            b'command = "user-hook"\n'
+            b"[other]\n"
+            b"gmskit_marker = true\n"
+        )
+        path, original_mtime_ns = self._user_hooks_file(tmp_path, original)
+
+        removed_file = integration.remove_vibe_event_hooks(
+            tmp_path, ensure_safe_destination=lambda _path: None
+        )
+
+        assert removed_file is False
+        self._assert_untouched(path, original, original_mtime_ns)
+
+    def test_removal_ignores_headers_inside_a_managed_multiline_string(self, tmp_path):
+        integration = get_integration("vibe")
+        path = tmp_path / ".vibe" / "hooks.toml"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            "[[hooks]]\n"
+            'command = """\n'
+            "[[hooks]]\n"
+            "not a header\n"
+            '"""\n'
+            "gmskit_marker = true\n"
+            "[other]\n"
+            'value = "preserved"\n',
+            encoding="utf-8",
+        )
+
+        removed_file = integration.remove_vibe_event_hooks(
+            tmp_path, ensure_safe_destination=lambda _path: None
+        )
+
+        assert removed_file is False
+        assert path.read_text(encoding="utf-8") == '[other]\nvalue = "preserved"\n'
+
+    def test_removal_ignores_header_like_nested_arrays(self, tmp_path):
+        """An array value must not split a managed array-of-tables block."""
+        integration = get_integration("vibe")
+        path = tmp_path / ".vibe" / "hooks.toml"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            "[[hooks]]\n"
+            "values = [\n"
+            '  [[ "hooks" ]]\n'
+            "]\n"
+            "gmskit_marker = true\n"
+            "[other]\n"
+            'value = "preserved"\n',
+            encoding="utf-8",
+        )
+        assert tomllib.loads(path.read_text(encoding="utf-8"))["hooks"][0]["values"] == [
+            [["hooks"]]
+        ]
+
+        removed_file = integration.remove_vibe_event_hooks(
+            tmp_path, ensure_safe_destination=lambda _path: None
+        )
+
+        assert removed_file is False
+        assert path.read_text(encoding="utf-8") == '[other]\nvalue = "preserved"\n'
+
+    def test_removal_leaves_malformed_multiline_source_untouched(self, tmp_path):
+        integration = get_integration("vibe")
+        original = (
+            b"[[hooks]]\n"
+            b'command = """\n'
+            b"gmskit_marker = true\n"
+        )
+        path, original_mtime_ns = self._user_hooks_file(tmp_path, original)
+
+        removed_file = integration.remove_vibe_event_hooks(
+            tmp_path, ensure_safe_destination=lambda _path: None
+        )
+
+        assert removed_file is False
+        self._assert_untouched(path, original, original_mtime_ns)
+
+    @pytest.mark.parametrize(
+        "original",
+        [
+            (
+                "[[hooks]]\r\n"
+                'name = "\u7528\u6237-hook"\r\n'
+                "values = [gmskit_marker = true]\r\n"
+                "[other]\r\n"
+                'keep = "\u4fdd\u7559"\r\n'
+            ).encode(),
+            (
+                "[[hooks]]\n"
+                'name = "caf\u00e9-user"\n'
+                "bare invalid text\n"
+                "gmskit_marker = true\n"
+                "[other]\n"
+                'keep = "\u4fdd\u7559"\n'
+            ).encode(),
+            (
+                "[[hooks]]\r"
+                'name = "user-hook"\r'
+                "gmskit_marker = true\r"
+            ).encode(),
+        ],
+        ids=("marker-like-array", "bare-invalid-text", "bare-cr"),
+    )
+    def test_malformed_toml_leaves_removal_and_merge_unowned_and_untouched(
+        self, tmp_path, original
+    ):
+        """Invalid TOML must fail closed even when it resembles a managed hook."""
+        integration = get_integration("vibe")
+        with pytest.raises(tomllib.TOMLDecodeError):
+            tomllib.loads(original.decode())
+        path, original_mtime_ns = self._user_hooks_file(tmp_path, original)
+
+        removed_file = integration.remove_vibe_event_hooks(
+            tmp_path, ensure_safe_destination=lambda _path: None
+        )
+
+        assert removed_file is False
+        self._assert_untouched(path, original, original_mtime_ns)
+
+        manifest = _vibe_manifest()
+        install_integration_events(
+            integration,
+            tmp_path,
+            manifest,
+            {"pre_tool_use": [{"command": "gmskit.tdd.validate"}]},
+        )
+
+        self._assert_untouched(path, original, original_mtime_ns)
+        manifest.record_existing.assert_not_called()
+
+    def test_malformed_header_with_triple_quotes_leaves_removal_and_merge_untouched(
+        self, tmp_path
+    ):
+        """Malformed header tokens must not let a user hook gain our marker."""
+        integration = get_integration("vibe")
+        original = (
+            b"[[hooks]]\n"
+            b'name = "user-owned"\n'
+            b'[ """malformed-header""" ]\n'
+            b"gmskit_marker = true\n"
+            b"[other]\n"
+            b'keep = "survives"\n'
+        )
+        with pytest.raises(tomllib.TOMLDecodeError):
+            tomllib.loads(original.decode("utf-8"))
+        path, original_mtime_ns = self._user_hooks_file(tmp_path, original)
+
+        removed_file = integration.remove_vibe_event_hooks(
+            tmp_path, ensure_safe_destination=lambda _path: None
+        )
+
+        assert removed_file is False
+        self._assert_untouched(path, original, original_mtime_ns)
+
+        install_integration_events(
+            integration,
+            tmp_path,
+            _vibe_manifest(),
+            {"pre_tool_use": [{"command": "gmskit.tdd.validate"}]},
+        )
+
+        self._assert_untouched(path, original, original_mtime_ns)
+
+    def test_forced_teardown_preserves_unowned_file_with_manifest_claim(self, tmp_path):
+        integration = get_integration("vibe")
+        original = b'user_option = "keep"\r\n'
+        path, original_mtime_ns = self._user_hooks_file(tmp_path, original)
+        manifest = IntegrationManifest(integration.key, tmp_path, version="test")
+        manifest.record_existing(".vibe/hooks.toml")
+        manifest.save()
+
+        integration.teardown(tmp_path, manifest, force=True)
+
+        self._assert_untouched(path, original, original_mtime_ns)
+
+
+class TestVibeUserInvocable:
+    def test_all_skills_have_user_invocable(self, tmp_path):
+        i = get_integration("vibe")
+        m = IntegrationManifest("vibe", tmp_path)
+        created = i.setup(tmp_path, m, script_type="sh")
+        skill_files = [f for f in created if f.name == "SKILL.md"]
+        assert skill_files
+        for f in skill_files:
+            content = f.read_text(encoding="utf-8")
+            assert content.startswith("---"), (
+                f"{f.parent.name}/SKILL.md is missing the opening frontmatter delimiter '---'"
+            )
+            parts = content.split("---", 2)
+            assert len(parts) >= 3, (
+                f"{f.parent.name}/SKILL.md has malformed frontmatter; expected a '--- ... ---' block"
+            )
+            parsed = yaml.safe_load(parts[1])
+            assert parsed.get("user-invocable") is True, (
+                f"{f.parent.name}/SKILL.md is missing user-invocable: true in frontmatter"
+            )
+
+    def test_all_skills_have_disable_model_invocation(self, tmp_path):
+        i = get_integration("vibe")
+        m = IntegrationManifest("vibe", tmp_path)
+        created = i.setup(tmp_path, m, script_type="sh")
+        skill_files = [f for f in created if f.name == "SKILL.md"]
+        assert skill_files
+        for f in skill_files:
+            content = f.read_text(encoding="utf-8")
+            parts = content.split("---", 2)
+            parsed = yaml.safe_load(parts[1])
+            assert parsed.get("disable-model-invocation") is False, (
+                f"{f.parent.name}/SKILL.md is missing disable-model-invocation: false in frontmatter"
+            )
+
+
+class TestVibeInjectFrontmatterFlagNoTrailingNewline:
+    """`_inject_frontmatter_flag` must not corrupt content whose closing
+    frontmatter delimiter is the file's last line with no trailing newline.
+
+    `post_process_skill_content` calls this helper on content from
+    "external skill generators (presets, extensions)" (per the base
+    class's docstring) -- not guaranteed to end with a trailing newline.
+    Without a newline after the injected line, the injected text glues
+    onto the closing `---`, destroying the delimiter.
+    """
+
+    def test_single_call_keeps_delimiter_on_its_own_line(self):
+        from specify_cli.integrations.vibe import VibeIntegration
+
+        content = "---\nname: x\n---"
+        result = VibeIntegration._inject_frontmatter_flag(
+            content, "user-invocable"
+        )
+        assert result == "---\nname: x\nuser-invocable: true\n---"
+
+    def test_chained_calls_both_apply(self):
+        """The exact sequence `post_process_skill_content` runs: a second
+        injected key must still land, not be silently dropped because the
+        first call already destroyed the closing `---` line."""
+        from specify_cli.integrations.vibe import VibeIntegration
+
+        content = "---\nname: x\n---"
+        result = VibeIntegration._inject_frontmatter_flag(
+            content, "user-invocable"
+        )
+        result = VibeIntegration._inject_frontmatter_flag(
+            result, "disable-model-invocation", "false"
+        )
+        assert result == (
+            "---\nname: x\nuser-invocable: true\n"
+            "disable-model-invocation: false\n---"
+        )
+
+    def test_preserves_crlf_line_endings(self):
+        """When the closing delimiter *does* end with \\r\\n, the injected
+        line must reuse that EOL rather than switching the file to LF."""
+        from specify_cli.integrations.vibe import VibeIntegration
+
+        content = "---\r\nname: x\r\n---\r\n"
+        result = VibeIntegration._inject_frontmatter_flag(
+            content, "user-invocable"
+        )
+        assert result == "---\r\nname: x\r\nuser-invocable: true\r\n---\r\n"
