@@ -2,6 +2,13 @@
 
 <!-- insert new changelog below this comment -->
 
+## [1.2.4] - 2026-10-23
+
+### Changed
+
+- Rebrand Spec Kit as GMS Kit (`spec-kit` → `gms-kit`, `speckit` → `gmskit` commands)
+- Move the repository to LeeMin-Tae/gms-kit
+
 ## [1.2.3] - 2026-10-22
 
 ### Changed
